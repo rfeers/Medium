@@ -1,0 +1,359 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "a9646369",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from selenium import webdriver\n",
+    "from selenium.webdriver.common.by import By\n",
+    "from bs4 import BeautifulSoup\n",
+    "import time\n",
+    "import pandas as pd"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "4d5a7591",
+   "metadata": {},
+   "source": [
+    "# Defining job and country/location"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "34863b12",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "'https://www.linkedin.com/jobs/search?keywords=Data%20Scientist&location=United%20States&geoId=103644278&trk=public_jobs_jobs-search-bar_search-submit&position=1&pageNum=0'"
+      ]
+     },
+     "execution_count": 2,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "job_name = \"Data Scientist\"\n",
+    "country_name = \"United States\"\n",
+    "\n",
+    "#We create the corresponding job name in URL\n",
+    "job_url =\"\";\n",
+    "for item in job_name.split(\" \"):\n",
+    "    if item != job_name.split(\" \")[-1]:\n",
+    "        job_url = job_url + item + \"%20\"\n",
+    "    else:\n",
+    "        job_url = job_url + item\n",
+    "        \n",
+    "#We create the  corresponding country name in URL\n",
+    "country_url =\"\";\n",
+    "for item in country_name.split(\" \"):\n",
+    "    if item != country_name.split(\" \")[-1]:\n",
+    "        country_url = country_url + item + \"%20\"\n",
+    "    else:\n",
+    "        country_url = country_url + item\n",
+    "\n",
+    "url = \"https://www.linkedin.com/jobs/search?keywords={0}&location={1}&geoId=103644278&trk=public_jobs_jobs-search-bar_search-submit&position=1&pageNum=0\".format(job_url,country_url)\n",
+    "url  "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "0bb185d1",
+   "metadata": {},
+   "source": [
+    "# Loading Driver"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "b743c38e",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/var/folders/5h/h364vcws335c872gj8pv3jvm0000gn/T/ipykernel_5364/1540908739.py:2: DeprecationWarning: executable_path has been deprecated, please pass in a Service object\n",
+      "  driver = webdriver.Chrome(\"ChromeDriver_Path/chromedriver\")\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Creating a webdriver instance\n",
+    "driver = webdriver.Chrome(\"ChromeDriver_Path/chromedriver\")\n",
+    "# Opening the url we have just defined in our browser\n",
+    "driver.get(url)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "e32070bf",
+   "metadata": {},
+   "source": [
+    "# Detecting elements in our Browser"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "5c1467c8",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current at:  502 Percentage at:  100.39920159680639 %\r"
+     ]
+    }
+   ],
+   "source": [
+    "#We find how many jobs are offered.\n",
+    "jobs_num = driver.find_element(By.CSS_SELECTOR,\"h1>span\").get_attribute(\"innerText\")\n",
+    "if len(jobs_num.split(',')) > 1:\n",
+    "    jobs_num = int(jobs_num.split(',')[0])*1000\n",
+    "else:\n",
+    "    jobs_num = int(jobs_num)\n",
+    "\n",
+    "jobs_num   = int(jobs_num)\n",
+    "\n",
+    "#Here I choose manually a number of jobs, so it wont take that long:\n",
+    "jobs_num = 1000;\n",
+    "\n",
+    "\n",
+    "#We create a while loop to browse all jobs. \n",
+    "i = 2\n",
+    "while i <= int(jobs_num/2)+1:\n",
+    "    #We keep scrollind down to the end of the view.\n",
+    "    driver.execute_script(\"window.scrollTo(0, document.body.scrollHeight);\")\n",
+    "    i = i + 1\n",
+    "    print(\"Current at: \", i, \"Percentage at: \", ((i+1)/(int(jobs_num/2)+1))*100, \"%\",end=\"\\r\")\n",
+    "    try:\n",
+    "        #We try to click on the load more results buttons in case it is already displayed.\n",
+    "        infinite_scroller_button = driver.find_element(By.XPATH, \".//button[@aria-label='Load more results']\")\n",
+    "        infinite_scroller_button.click()\n",
+    "        time.sleep(0.1)\n",
+    "    except:\n",
+    "        #If there is no button, there will be an error, so we keep scrolling down.\n",
+    "        time.sleep(0.1)\n",
+    "        pass"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "10401de1",
+   "metadata": {},
+   "source": [
+    "# Loading Basic Data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "de6c0b3e",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#We get a list containing all jobs that we have found.\n",
+    "job_lists = driver.find_element(By.CLASS_NAME,\"jobs-search__results-list\")\n",
+    "jobs = job_lists.find_elements(By.TAG_NAME,\"li\") # return a list\n",
+    "\n",
+    "#We declare void list to keep track of all obtaind data.\n",
+    "job_title_list = []\n",
+    "company_name_list = []\n",
+    "location_list = []\n",
+    "date_list = []\n",
+    "job_link_list = []\n",
+    "\n",
+    "#We loof over every job and obtain all the wanted info.\n",
+    "for job in jobs:\n",
+    "    #job_title\n",
+    "    job_title = job.find_element(By.CSS_SELECTOR,\"h3\").get_attribute(\"innerText\")\n",
+    "    job_title_list.append(job_title)\n",
+    "    \n",
+    "    #company_name\n",
+    "    company_name = job.find_element(By.CSS_SELECTOR,\"h4\").get_attribute(\"innerText\")\n",
+    "    company_name_list.append(company_name)\n",
+    "    \n",
+    "    #location\n",
+    "    location = job.find_element(By.CSS_SELECTOR,\"div>div>span\").get_attribute(\"innerText\")\n",
+    "    location_list.append(location)\n",
+    "    \n",
+    "    #date\n",
+    "    date = job.find_element(By.CSS_SELECTOR,\"div>div>time\").get_attribute(\"datetime\")\n",
+    "    date_list.append(date)\n",
+    "    \n",
+    "    #job_link\n",
+    "    job_link = job.find_element(By.CSS_SELECTOR,\"a\").get_attribute(\"href\")\n",
+    "    job_link_list.append(job_link)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "42c7cd27",
+   "metadata": {},
+   "source": [
+    "# Loading More Data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "f2f36b41",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Current at:  997 Percentage at:  100.0 %995991984 %%% 54.10821643286573 %\r"
+     ]
+    }
+   ],
+   "source": [
+    "jd = [] #job_description\n",
+    "seniority = []\n",
+    "emp_type = []\n",
+    "job_func = []\n",
+    "job_ind = []\n",
+    "for item in range(len(jobs)):\n",
+    "    job_func0=[]\n",
+    "    industries0=[]\n",
+    "    # clicking job to view job details\n",
+    "    \n",
+    "    #__________________________________________________________________________ JOB Link\n",
+    "    \n",
+    "    try: \n",
+    "        job_click_path = f'/html/body/div/div/main/section/ul/li[{item+1}]'\n",
+    "        job_click = job.find_element(By.XPATH,job_click_path).click()\n",
+    "    except:\n",
+    "        pass\n",
+    "    #job_click = job.find_element(By.XPATH,'.//a[@class=\"base-card_full-link\"]')\n",
+    "    \n",
+    "    #__________________________________________________________________________ JOB Description\n",
+    "    jd_path = '/html/body/div/div/section/div/div/section/div/div/section/div'\n",
+    "    try:\n",
+    "        jd0 = job.find_element(By.XPATH,jd_path).get_attribute('innerText')\n",
+    "        jd.append(jd0)\n",
+    "    except:\n",
+    "        jd.append(None)\n",
+    "        pass\n",
+    "    \n",
+    "    #__________________________________________________________________________ JOB Seniority\n",
+    "    seniority_path='/html/body/div/div/section/div/div/section/div/ul/li[1]/span'\n",
+    "    \n",
+    "    try:\n",
+    "        seniority0 = job.find_element(By.XPATH,seniority_path).get_attribute('innerText')\n",
+    "        seniority.append(seniority0)\n",
+    "    except:\n",
+    "        seniority.append(None)\n",
+    "        pass\n",
+    "\n",
+    "    #__________________________________________________________________________ JOB Time\n",
+    "    emp_type_path='/html/body/div/div/section/div/div/section/div/ul/li[2]/span'\n",
+    "    \n",
+    "    try:\n",
+    "        emp_type0 = job.find_element(By.XPATH,emp_type_path).get_attribute('innerText')\n",
+    "        emp_type.append(emp_type0)\n",
+    "    except:\n",
+    "        emp_type.append(None)\n",
+    "        pass\n",
+    "    \n",
+    "    #__________________________________________________________________________ JOB Function\n",
+    "    function_path='/html/body/div/div/section/div/div/section/div/ul/li[3]/span'\n",
+    "    \n",
+    "    try:\n",
+    "        func0 = job.find_element(By.XPATH,function_path).get_attribute('innerText')\n",
+    "        job_func.append(func0)\n",
+    "    except:\n",
+    "        job_func.append(None)\n",
+    "        pass\n",
+    "\n",
+    "    #__________________________________________________________________________ JOB Industry\n",
+    "    industry_path='/html/body/div/div/section/div/div/section/div/ul/li[4]/span'\n",
+    "    \n",
+    "    try:\n",
+    "        ind0 = job.find_element(By.XPATH,industry_path).get_attribute('innerText')\n",
+    "        job_ind.append(ind0)\n",
+    "    except:\n",
+    "        job_ind.append(None)\n",
+    "        pass\n",
+    "    \n",
+    "    print(\"Current at: \", item, \"Percentage at: \", (item+1)/len(jobs)*100, \"%\",end=\"\\r\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "id": "51709464",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "job_data = pd.DataFrame({\n",
+    "    'Date': date_list,\n",
+    "    'Company': company_name_list,\n",
+    "    'Title': job_title_list,\n",
+    "    'Location': location_list,\n",
+    "    'Description': jd,\n",
+    "    'Level': seniority,\n",
+    "    'Type': emp_type,\n",
+    "    'Function': job_func,\n",
+    "    'Industry': job_ind,\n",
+    "    'Link': job_link\n",
+    "})"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "id": "e4c231c0",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "job_data.to_csv(\"Output/ddbb_{0}_{1}_.csv\".format(job_name,country_name))"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.9.7"
+  },
+  "toc": {
+   "base_numbering": 1,
+   "nav_menu": {},
+   "number_sections": true,
+   "sideBar": true,
+   "skip_h1_title": false,
+   "title_cell": "Table of Contents",
+   "title_sidebar": "Contents",
+   "toc_cell": false,
+   "toc_position": {},
+   "toc_section_display": true,
+   "toc_window_display": false
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
